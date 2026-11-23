@@ -7599,6 +7599,7 @@ function parseDocument(source, options = {}) {
 }
 export {
   applyEdits,
+  createScanner,
   getNodeValue2 as getNodeValue,
   modify,
   parseDocument,

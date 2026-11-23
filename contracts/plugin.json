@@ -47,7 +47,8 @@
       "additionalProperties": false,
       "required": [
         "names",
-        "path"
+        "path",
+        "items"
       ],
       "properties": {
         "names": {
@@ -63,6 +64,30 @@
           "type": "string",
           "description": "Absolute path of the Global user settings file or Skills directory displayed to the owner.",
           "maxLength": 4096
+        },
+        "items": {
+          "type": "array",
+          "description": "Skill list summaries for search. Missing description means the front matter needs repair or cannot be read.",
+          "items": {
+            "type": "object",
+            "description": "Summary of a native Skill.",
+            "additionalProperties": false,
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Native resource name. The plugin validates it before using it as a file or JSON key.",
+                "maxLength": 80
+              },
+              "description": {
+                "type": "string",
+                "description": "Skill description from validated YAML front matter.",
+                "maxLength": 1024
+              }
+            }
+          }
         }
       }
     },
@@ -73,7 +98,8 @@
       "required": [
         "names",
         "path",
-        "revision"
+        "revision",
+        "items"
       ],
       "properties": {
         "names": {
@@ -81,8 +107,9 @@
           "description": "Sorted names of managed native resources.",
           "items": {
             "type": "string",
-            "description": "Native resource name. The plugin validates it before using it as a file or JSON key.",
-            "maxLength": 80
+            "description": "Exact native MCP JSON key. Spaces, Unicode and punctuation are preserved.",
+            "minLength": 1,
+            "maxLength": 524288
           }
         },
         "path": {
@@ -94,6 +121,46 @@
           "type": "string",
           "description": "SHA-256 revision of the currently loaded UTF-8 file, or empty when missing.",
           "maxLength": 64
+        },
+        "items": {
+          "type": "array",
+          "description": "MCP summaries containing no command, URL, arguments, headers or environment variables.",
+          "items": {
+            "type": "object",
+            "description": "Summary of a native MCP server.",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "transport",
+              "editable"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Exact native MCP JSON key. Spaces, Unicode and punctuation are preserved.",
+                "minLength": 1,
+                "maxLength": 524288
+              },
+              "transport": {
+                "type": "string",
+                "description": "Native transport or unsupported when its configuration cannot be classified safely.",
+                "enum": [
+                  "stdio",
+                  "http",
+                  "sse",
+                  "unsupported"
+                ]
+              },
+              "editable": {
+                "type": "boolean",
+                "description": "Whether the stored definition is an object that can be repaired through the supported fields editor."
+              },
+              "enabled": {
+                "type": "boolean",
+                "description": "Configured user-layer status for supported definitions, independent of connectivity."
+              }
+            }
+          }
         }
       }
     },
@@ -189,7 +256,7 @@
     },
     "mcpWrite": {
       "type": "object",
-      "description": "Save supported JSON transport fields. Stored value markers preserve the underlying string at the same location.",
+      "description": "Save supported transport fields and optional native disabled state. If omitted, disabled is retained. Stored markers keep the underlying string.",
       "additionalProperties": false,
       "required": [
         "name",
@@ -200,8 +267,9 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "Native resource name. The plugin validates it before using it as a file or JSON key.",
-          "maxLength": 80
+          "description": "Exact native MCP JSON key. Spaces, Unicode and punctuation are preserved.",
+          "minLength": 1,
+          "maxLength": 524288
         },
         "text": {
           "type": "string",
@@ -242,7 +310,7 @@
     },
     "settingsWrite": {
       "type": "object",
-      "description": "Patch the supported non-secret settings. Omitted keys are unchanged and null removes a user override.",
+      "description": "Patch supported non-secret settings. Omitted settings are unchanged, and null removes a user override. Both tool search keys are accepted, with the canonical key taking priority.",
       "additionalProperties": false,
       "required": [
         "text",
@@ -260,6 +328,172 @@
           "maxLength": 64
         }
       }
+    },
+    "skillDocument": {
+      "type": "object",
+      "description": "Full Skill Markdown with optional parsed details for valid native front matter.",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "revision"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Editor contents. Skill Markdown or JSON object text, depending on the operation.",
+          "maxLength": 524288
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 revision of the currently loaded UTF-8 file, or empty when missing.",
+          "maxLength": 64
+        },
+        "description": {
+          "type": "string",
+          "description": "Skill description from validated YAML front matter.",
+          "maxLength": 1024
+        },
+        "bodyOffset": {
+          "type": "integer",
+          "description": "UTF-16 string index at which the Markdown body starts, if front matter is valid.",
+          "minimum": 0,
+          "maximum": 524288
+        }
+      }
+    },
+    "skillEdit": {
+      "type": "object",
+      "description": "Structured edit of a Skill description and body. Existing front matter fields are retained.",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "revision",
+        "description",
+        "body"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Native resource name. The plugin validates it before using it as a file or JSON key.",
+          "maxLength": 80
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 revision of the currently loaded UTF-8 file, or empty when missing.",
+          "maxLength": 64
+        },
+        "description": {
+          "type": "string",
+          "description": "Skill description from validated YAML front matter.",
+          "maxLength": 1024
+        },
+        "body": {
+          "type": "string",
+          "description": "Skill Markdown without YAML front matter.",
+          "maxLength": 524288
+        }
+      }
+    },
+    "editorEngineStatus": {
+      "type": "object",
+      "description": "Detected Auggie CLI state shared with Agent Management.",
+      "additionalProperties": false,
+      "required": [
+        "installed",
+        "version",
+        "source"
+      ],
+      "properties": {
+        "installed": {
+          "type": "boolean",
+          "description": "A working supported binary was detected."
+        },
+        "version": {
+          "type": "string",
+          "description": "Detected version or empty when unavailable.",
+          "maxLength": 128
+        },
+        "source": {
+          "type": "string",
+          "description": "Engine ownership or detection status.",
+          "enum": [
+            "managed",
+            "external",
+            "not-installed",
+            "error"
+          ]
+        },
+        "error": {
+          "type": "string",
+          "description": "Sanitized CLI detection error.",
+          "maxLength": 512
+        }
+      }
+    },
+    "mcpRead": {
+      "type": "object",
+      "description": "Select the exact native user MCP key.",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Exact native MCP JSON key. Spaces, Unicode and punctuation are preserved.",
+          "minLength": 1,
+          "maxLength": 524288
+        }
+      }
+    },
+    "mcpRemove": {
+      "type": "object",
+      "description": "Delete the displayed revision of the exact native MCP key.",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "revision"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Exact native MCP JSON key. Spaces, Unicode and punctuation are preserved.",
+          "minLength": 1,
+          "maxLength": 524288
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 revision of the currently loaded UTF-8 file, or empty when missing.",
+          "maxLength": 64
+        }
+      }
+    },
+    "mcpEnabledWrite": {
+      "type": "object",
+      "description": "Set the user-level enabled state of a native MCP definition at the supplied file revision.",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "revision",
+        "enabled"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Exact native MCP JSON key. Spaces, Unicode and punctuation are preserved.",
+          "minLength": 1,
+          "maxLength": 524288
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 revision of the currently loaded UTF-8 file, or empty when missing.",
+          "maxLength": 64
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Requested configured state. Written as the inverse native disabled field."
+        }
+      }
     }
   },
   "rpc": {
@@ -271,7 +505,7 @@
     "read-skill": {
       "description": "Read a user SKILL.md and its revision.",
       "input": "name",
-      "output": "resource"
+      "output": "skillDocument"
     },
     "save-skill": {
       "description": "Create or update the named Skill file.",
@@ -290,7 +524,7 @@
     },
     "read-mcp": {
       "description": "Read supported and safely masked MCP fields.",
-      "input": "name",
+      "input": "mcpRead",
       "output": "resource"
     },
     "save-mcp": {
@@ -300,7 +534,7 @@
     },
     "remove-mcp": {
       "description": "Remove just the named MCP entry.",
-      "input": "removeResource",
+      "input": "mcpRemove",
       "output": "ok"
     },
     "read-settings": {
@@ -311,6 +545,21 @@
     "save-settings": {
       "description": "Apply a patch to the editable defaults without changing other settings.",
       "input": "settingsWrite",
+      "output": "ok"
+    },
+    "edit-skill": {
+      "description": "Edit a Skill in structured fields while preserving other YAML front matter.",
+      "input": "skillEdit",
+      "output": "ok"
+    },
+    "settings-engine-status": {
+      "description": "Read CLI version and engine ownership without checking login or updating the engine.",
+      "input": "empty",
+      "output": "editorEngineStatus"
+    },
+    "set-mcp-enabled": {
+      "description": "Set only the native user MCP disabled field.",
+      "input": "mcpEnabledWrite",
       "output": "ok"
     }
   },

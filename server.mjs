@@ -169,9 +169,10 @@ export function apply(ctx) {
   const { userId, profile } = ctx.identity
   const owner = { userId, profile }
   const config = nativeConfiguration()
+  const manager = managedEngine(ctx.paths.dataDir)
   const handlers = {
-    'list-skills': 'listSkills', 'read-skill': 'readSkill', 'save-skill': 'saveSkill', 'remove-skill': 'removeSkill',
-    'list-mcp': 'listMcp', 'read-mcp': 'readMcp', 'save-mcp': 'saveMcp', 'remove-mcp': 'removeMcp',
+    'list-skills': 'listSkills', 'read-skill': 'readSkill', 'save-skill': 'saveSkill', 'edit-skill': 'editSkill', 'remove-skill': 'removeSkill',
+    'list-mcp': 'listMcp', 'read-mcp': 'readMcp', 'save-mcp': 'saveMcp', 'set-mcp-enabled': 'setMcpEnabled', 'remove-mcp': 'removeMcp',
     'read-settings': 'readSettings', 'save-settings': 'saveSettings',
   }
   const methods = Object.entries(handlers).map(([name, method]) =>
@@ -187,7 +188,11 @@ export function apply(ctx) {
         throw error
       }
     }))
-  const registration = ctx.extensions.agents.register(definitionFor(owner, managedEngine(ctx.paths.dataDir)))
+  methods.push(registerRpc(ctx, contract, 'settings-engine-status', async (_input, run) => {
+    requireOwner(owner, run)
+    return manager.status(run.signal)
+  }))
+  const registration = ctx.extensions.agents.register(definitionFor(owner, manager))
   return async () => {
     await Promise.all([registration.dispose(), ...methods.map(dispose => dispose())])
   }

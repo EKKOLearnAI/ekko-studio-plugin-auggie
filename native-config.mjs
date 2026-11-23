@@ -3,14 +3,15 @@ import { constants } from 'node:fs'
 import { lstat, mkdir, open, readdir, realpath, rename, rm, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join } from 'node:path'
-import { applyEdits, getNodeValue, modify, parseDocument, parseTree } from './vendor-config.mjs'
+import { applyEdits, createScanner, getNodeValue, modify, parseDocument, parseTree } from './vendor-config.mjs'
 import { childEnv } from './engine.mjs'
 
 const fileLimit = 512 * 1024
 const skillPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
-const serverPattern = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$/
 const reserved = new Set(['__proto__', 'constructor', 'prototype'])
-const mcpKeys = ['type', 'command', 'args', 'env', 'url', 'headers']
+const mcpKeys = ['type', 'command', 'args', 'env', 'url', 'headers', 'disabled']
+const toolSearch = 'toolSearchEnabled'
+const legacyToolSearch = 'enableToolSearch'
 const transports = ['stdio', 'http', 'sse']
 const mask = '[stored value]'
 const format = { formattingOptions: { insertSpaces: true, tabSize: 2 } }
@@ -31,10 +32,19 @@ function checkRevision(expected, text) {
   if (expected !== revision(text)) throw new Error('Auggie files changed. Reload the editor before saving.')
 }
 
-function checkName(name, kind) {
-  const valid = kind === 'skill' ? name.length <= 64 && skillPattern.test(name) : serverPattern.test(name)
-  if (!valid || reserved.has(name)) throw new Error('Invalid Auggie resource name.')
+function checkSkillName(name) {
+  if (name.length > 64 || name !== name.trim() || !skillPattern.test(name)) {
+    throw new Error('Skill names must be 1–64 characters with lowercase letters, digits and single hyphens between groups.')
+  }
   return name
+}
+
+function validMcpName(name) {
+  return name.length > 0 && name.length <= fileLimit && !reserved.has(name)
+}
+
+function checkMcpName(name) {
+  if (!validMcpName(name)) throw new Error('Invalid Auggie MCP server name.')
 }
 
 async function safeDirectories(home, segments, create = false) {
@@ -120,23 +130,49 @@ function parseObject(text, allowComments, label) {
 const settingChecks = {
   defaultModel: text => typeof text === 'string' && /^[\w.+:/-]{1,160}$/.test(text),
   enableSkillCommands: value => typeof value === 'boolean',
-  enableToolSearch: value => typeof value === 'boolean',
+  [toolSearch]: value => typeof value === 'boolean',
   theme: text => typeof text === 'string' && /^[\w .-]{1,80}$/.test(text),
   notificationMode: value => ['off', 'bell', 'desktop_notification'].includes(value),
 }
 
 function settingsForEditor(settings) {
-  return Object.fromEntries(Object.entries(settingChecks).filter(([key, valid]) =>
+  const editable = Object.fromEntries(Object.entries(settingChecks).filter(([key, valid]) =>
     valid(settings[key])).map(([key]) => [key, settings[key]]))
+  if (!Object.hasOwn(editable, toolSearch) && settings[legacyToolSearch] === true) editable[toolSearch] = true
+  return editable
 }
 
 function editJson(text, path, value) {
+  if (value === undefined) {
+    // JSONC's generic delete spans the gap between properties, which can contain user comments.
+    let parent = parseTree(text)
+    for (const segment of path.slice(0, -1)) {
+      parent = parent?.children?.find(property => property.children?.[0]?.value === segment)?.children?.[1]
+    }
+    if (parent?.type !== 'object') return text
+    const index = parent.children.findIndex(property => property.children[0].value === path.at(-1))
+    if (index === -1) return text
+    const property = parent.children[index]
+    const scanner = createScanner(text, true)
+    function commaAfter(node) {
+      scanner.setPosition(node.offset + node.length)
+      scanner.scan()
+      const offset = scanner.getTokenOffset()
+      return text[offset] === ',' ? offset : undefined
+    }
+    const preceding = parent.children[index - 1]
+    const comma = commaAfter(property) ?? (preceding ? commaAfter(preceding) : undefined)
+    const edits = [{ offset: property.offset, length: property.length, content: '' }]
+    if (comma !== undefined) edits.push({ offset: comma, length: 1, content: '' })
+    return applyEdits(text, edits)
+  }
   return applyEdits(text, modify(text, path, value, format))
 }
 
 function maskedConfig(config) {
   const output = {}
   if (transports.includes(config.type)) output.type = config.type
+  if (typeof config.disabled === 'boolean') output.disabled = config.disabled
   for (const key of ['command', 'url']) {
     if (typeof config[key] === 'string') output[key] = mask
   }
@@ -152,6 +188,9 @@ function maskedConfig(config) {
 function mergeMcp(text, previous) {
   const config = parseObject(text, false, 'MCP configuration')
   if (Object.keys(config).some(key => !mcpKeys.includes(key))) throw new Error('Use supported Auggie MCP fields only.')
+  if (Object.hasOwn(config, 'disabled') && typeof config.disabled !== 'boolean') {
+    throw new Error('Auggie MCP disabled must be true or false.')
+  }
   const restore = (value, stored) => {
     if (value !== mask) return value
     if (typeof stored !== 'string') throw new Error('Enter a value in place of an unmatched stored value marker.')
@@ -193,17 +232,33 @@ function mergeMcp(text, previous) {
   return config
 }
 
-function validateSkill(name, markdown) {
+function skillDocument(name, markdown) {
   const header = markdown.match(/^\uFEFF?---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/)
   if (header) {
     try {
       const doc = parseDocument(header[1], { strict: true, uniqueKeys: true })
       const value = doc.errors.length ? null : doc.toJS({ maxAliasCount: 0 })
       if (object(value) && Object.hasOwn(value, 'name') && Object.hasOwn(value, 'description') && value.name === name && typeof value.description === 'string' &&
-          value.description.trim() && value.description.length <= 1024) return
+          value.description.trim() && value.description.length <= 1024) {
+        const separator = /^\r?\n/.exec(markdown.slice(header[0].length))
+        return { doc, description: value.description, bodyOffset: header[0].length + (separator?.[0].length ?? 0) }
+      }
     } catch { /* Avoid echoing Skill contents in errors. */ }
   }
+}
+
+function validateSkill(name, markdown) {
+  if (skillDocument(name, markdown)) return
   throw new Error('SKILL.md needs YAML front matter with a matching name and a description of up to 1024 characters.')
+}
+
+function mcpSummary(name, config) {
+  const type = object(config) ? config.type ?? (config.command ? 'stdio' : 'http') : ''
+  const target = type === 'stdio' ? config?.command : config?.url
+  const transport = transports.includes(type) && typeof target === 'string' && target.trim() ? type : 'unsupported'
+  return { name, transport, editable: object(config),
+    ...(transport === 'unsupported' || (config.disabled !== undefined && typeof config.disabled !== 'boolean')
+      ? {} : { enabled: config.disabled !== true }) }
 }
 
 export function nativeConfiguration(root = nativeSettingsRoot()) {
@@ -223,7 +278,16 @@ export function nativeConfiguration(root = nativeSettingsRoot()) {
   }
 
   function skillDirectory(name, create) {
-    return safeDirectories(home, [dir, 'skills', checkName(name, 'skill')], create)
+    return safeDirectories(home, [dir, 'skills', checkSkillName(name)], create)
+  }
+
+  async function writeSkill(name, text, expected, signal) {
+    validateSkill(name, text)
+    const current = await skillDirectory(name)
+    checkRevision(expected, current ? await readText(join(current, 'SKILL.md')) : undefined)
+    const directory = current ?? await skillDirectory(name, true)
+    await atomicWrite(join(directory, 'SKILL.md'), text, expected, signal)
+    return { ok: true }
   }
 
   async function settings() {
@@ -254,26 +318,53 @@ export function nativeConfiguration(root = nativeSettingsRoot()) {
     async listSkills() {
       const directory = await safeDirectories(home, [dir, 'skills'])
       const entries = directory ? await readdir(directory, { withFileTypes: true }) : []
-      const names = []
+      const items = []
       for (const item of entries) {
-        if (!item.isDirectory() || item.name.length > 64 || !skillPattern.test(item.name) || reserved.has(item.name)) continue
-        if ((await exists(join(directory, item.name, 'SKILL.md')))?.isFile()) names.push(item.name)
+        if (!item.isDirectory() || item.name.length > 64 || item.name !== item.name.trim() || !skillPattern.test(item.name)) continue
+        const folder = await skillDirectory(item.name).catch(error => {
+          if (!error.code) return undefined
+          throw error
+        })
+        if (!folder) continue
+        const file = join(folder, 'SKILL.md')
+        const state = await exists(file)
+        if (!state?.isFile()) continue
+        const summary = { name: item.name }
+        if (state.size <= fileLimit) {
+          try {
+            const text = await readText(file)
+            const parsed = text && skillDocument(item.name, text)
+            if (parsed) summary.description = parsed.description
+          } catch { /* Keep unreadable Markdown visible without failing the whole list. */ }
+        }
+        items.push(summary)
       }
-      return { path: skillsPath, names: names.sort() }
+      items.sort((a, b) => a.name.localeCompare(b.name))
+      return { path: skillsPath, names: items.map(item => item.name).sort(), items }
     },
     async readSkill({ name }) {
       const directory = await skillDirectory(name)
       const markdown = directory ? await readText(join(directory, 'SKILL.md')) : undefined
-      return { text: markdown ?? '', revision: revision(markdown) }
+      const parsed = markdown && skillDocument(name, markdown)
+      return { text: markdown ?? '', revision: revision(markdown),
+        ...(parsed ? { description: parsed.description, bodyOffset: parsed.bodyOffset } : {}) }
     },
     saveSkill({ name, text, revision: expected }, signal) {
+      return serialize(signal, () => writeSkill(name, text, expected, signal))
+    },
+    editSkill({ name, description, body, revision: expected }, signal) {
       return serialize(signal, async () => {
-        validateSkill(name, text)
-        const current = await skillDirectory(name)
-        checkRevision(expected, current ? await readText(join(current, 'SKILL.md')) : undefined)
-        const directory = current ?? await skillDirectory(name, true)
-        await atomicWrite(join(directory, 'SKILL.md'), text, expected, signal)
-        return { ok: true }
+        const directory = await skillDirectory(name)
+        const markdown = directory ? await readText(join(directory, 'SKILL.md')) : undefined
+        checkRevision(expected, markdown)
+        const previous = markdown === undefined ? null : skillDocument(name, markdown)
+        if (markdown !== undefined && !previous) throw new Error('Repair this Skill in the SKILL.md editor first.')
+        const doc = previous?.doc ?? parseDocument('name: skill')
+        if (!previous) doc.set('name', name)
+        if (previous?.description !== description) doc.set('description', description)
+        const eol = markdown?.startsWith('---\r\n') ? '\r\n' : '\n'
+        const header = doc.toString({ lineWidth: 0 }).replace(/\n/g, eol)
+        return writeSkill(name, '---' + eol + header + '---' + eol + eol + body.replace(/\r?\n/g, eol), expected, signal)
       })
     },
     removeSkill({ name, revision: expected }, signal) {
@@ -291,11 +382,12 @@ export function nativeConfiguration(root = nativeSettingsRoot()) {
     },
     async listMcp() {
       const { value, text } = await settings()
-      const names = Object.keys(mcpServers(value)).filter(name => serverPattern.test(name) && !reserved.has(name)).sort()
-      return { path: settingsPath, names, revision: revision(text) }
+      const servers = mcpServers(value)
+      const names = Object.keys(servers).filter(validMcpName).sort()
+      return { path: settingsPath, names, items: names.map(name => mcpSummary(name, servers[name])), revision: revision(text) }
     },
     async readMcp({ name }) {
-      checkName(name, 'mcp')
+      checkMcpName(name)
       const { value, text } = await settings()
       const config = mcpServers(value)[name]
       if (!object(config)) throw new Error('Auggie MCP server was removed or has an unsupported format.')
@@ -303,7 +395,7 @@ export function nativeConfiguration(root = nativeSettingsRoot()) {
     },
     saveMcp({ name, text, revision: expected, existing }, signal) {
       return serialize(signal, async () => {
-        checkName(name, 'mcp')
+        checkMcpName(name)
         const current = await settings()
         checkRevision(expected, current.text)
         const servers = mcpServers(current.value)
@@ -316,6 +408,7 @@ export function nativeConfiguration(root = nativeSettingsRoot()) {
           edited = editJson(edited, ['mcpServers', name], config)
         } else {
           for (const key of mcpKeys) {
+            if (key === 'disabled' && !Object.hasOwn(config, key)) continue
             if (Object.hasOwn(config, key) || Object.hasOwn(previous, key)) {
               edited = editJson(edited, ['mcpServers', name, key], config[key])
             }
@@ -324,9 +417,20 @@ export function nativeConfiguration(root = nativeSettingsRoot()) {
         return saveSettings(edited, expected, signal)
       })
     },
+    setMcpEnabled({ name, revision: expected, enabled }, signal) {
+      return serialize(signal, async () => {
+        checkMcpName(name)
+        const current = await settings()
+        checkRevision(expected, current.text)
+        const item = mcpSummary(name, mcpServers(current.value)[name])
+        if (item.enabled === undefined) throw new Error('Auggie MCP server was removed or needs a valid definition before changing its status.')
+        if (item.enabled === enabled) return { ok: true }
+        return saveSettings(editJson(current.text, ['mcpServers', name, 'disabled'], !enabled), expected, signal)
+      })
+    },
     removeMcp({ name, revision: expected }, signal) {
       return serialize(signal, async () => {
-        checkName(name, 'mcp')
+        checkMcpName(name)
         const current = await settings()
         checkRevision(expected, current.text)
         if (!Object.hasOwn(mcpServers(current.value), name)) throw new Error('Auggie MCP server was removed.')
@@ -344,11 +448,21 @@ export function nativeConfiguration(root = nativeSettingsRoot()) {
         const patch = parseObject(text, false, 'Settings editor JSON')
         let edited = current.text ?? '{}\n'
         for (const [key, value] of Object.entries(patch)) {
-          if (!Object.hasOwn(settingChecks, key) || value !== null && !settingChecks[key](value)) {
+          const setting = key === legacyToolSearch ? toolSearch : key
+          if (!Object.hasOwn(settingChecks, setting) || value !== null && !settingChecks[setting](value)) {
             throw new Error('Use only the listed Auggie settings and value types.')
           }
-          if (value !== null || Object.hasOwn(current.value, key)) {
+          if (setting !== toolSearch && (value !== null || Object.hasOwn(current.value, key))) {
             edited = editJson(edited, [key], value === null ? undefined : value)
+          }
+        }
+        if (Object.hasOwn(patch, toolSearch) || Object.hasOwn(patch, legacyToolSearch)) {
+          const value = Object.hasOwn(patch, toolSearch) ? patch[toolSearch] : patch[legacyToolSearch]
+          // 1.x prefers toolSearchEnabled. The 0.x runtime only reads enableToolSearch.
+          for (const key of [toolSearch, legacyToolSearch]) {
+            if (value !== null || Object.hasOwn(current.value, key)) {
+              edited = editJson(edited, [key], value === null ? undefined : value)
+            }
           }
         }
         return saveSettings(edited, expected, signal)
