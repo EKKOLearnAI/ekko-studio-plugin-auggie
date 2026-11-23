@@ -142,7 +142,7 @@ async function installRelease(stage, version, run, env, node, npm) {
       '--userconfig', join(home, 'user.npmrc'), '--globalconfig', join(home, 'global.npmrc'),
       '--cache', cache, '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=false', '--save-exact',
       packageName + '@' + version],
-    { cwd: stage, env: child, signal: run.signal, timeout: 88_000, windowsHide: true, maxBuffer: 512 * 1024 })
+    { cwd: stage, env: child, signal: run.signal, timeout: 80_000, windowsHide: true, maxBuffer: 512 * 1024 })
   } catch {
     run.signal.throwIfAborted()
     throw new Error('npm could not install the official Auggie CLI package.')
@@ -158,7 +158,7 @@ function isolatedEnv(env, home) {
 }
 
 async function verifyAcp(engine, stage, run) {
-  const signal = AbortSignal.any([run.signal, AbortSignal.timeout(8500)])
+  const signal = AbortSignal.any([run.signal, AbortSignal.timeout(20_000)])
   const home = await mkdtemp(join(stage, '.verify-home-'))
   let acp
   try {

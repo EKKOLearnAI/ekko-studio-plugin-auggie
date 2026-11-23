@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { constants } from 'node:fs'
 import { access, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { delimiter, extname, isAbsolute, join } from 'node:path'
+import { delimiter, extname, isAbsolute, join, parse } from 'node:path'
 import { promisify } from 'node:util'
 
 const execute = promisify(execFile)
@@ -13,9 +13,13 @@ const inherited = new Set([
   'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'NODE_EXTRA_CA_CERTS',
 ])
 
+function absoluteHostPath(value) {
+  return isAbsolute(value) && (process.platform !== 'win32' || parse(value).root.length > 1)
+}
+
 export function pathEntries(env = process.env) {
   const path = Object.entries(env).find(([key]) => key.toUpperCase() === 'PATH')?.[1] ?? ''
-  return path.split(delimiter).filter(isAbsolute)
+  return path.split(delimiter).filter(absoluteHostPath)
 }
 
 export function nodeCandidates(env = process.env) {
@@ -23,7 +27,7 @@ export function nodeCandidates(env = process.env) {
   return [...new Set([env.HERMES_AGENT_NODE,
     ...(!process.versions.electron ? [process.execPath] : []),
     ...pathEntries(env).map(directory => join(directory, name)),
-  ].filter(value => typeof value === 'string' && isAbsolute(value)))]
+  ].filter(value => typeof value === 'string' && absoluteHostPath(value)))]
 }
 
 export async function externalEntry(env = process.env) {
@@ -31,14 +35,14 @@ export async function externalEntry(env = process.env) {
   const override = env.EKKO_AUGGIE_EXECUTABLE?.trim()
   const windows = process.platform === 'win32'
   const folders = pathEntries(env)
-  if (windows && env.APPDATA && isAbsolute(env.APPDATA)) folders.push(join(env.APPDATA, 'npm'))
+  if (windows && env.APPDATA && absoluteHostPath(env.APPDATA)) folders.push(join(env.APPDATA, 'npm'))
   if (!windows && isAbsolute(home)) folders.push(join(home, '.local', 'bin'))
   const candidates = override ? [override] : folders.flatMap(dir => windows
     ? ['auggie.exe', 'node_modules/@augmentcode/auggie/auggie-v2.mjs', 'node_modules/@augmentcode/auggie/augment.mjs']
       .map(name => join(dir, name))
     : [join(dir, 'auggie')])
   for (const candidate of new Set(candidates)) {
-    if (!isAbsolute(candidate)) continue
+    if (!absoluteHostPath(candidate)) continue
     const extension = extname(candidate).toLowerCase()
     const javascript = ['.mjs', '.cjs', '.js'].includes(extension)
     if (windows && !javascript && extension !== '.exe') continue
@@ -76,7 +80,7 @@ export async function findEngine(env = process.env, entry) {
 
 function probe(engine, args, signal, cwd) {
   return execute(engine.executable, [...engine.args, ...args], {
-    cwd, env: engine.env, signal, timeout: 5000, maxBuffer: 8192, windowsHide: true,
+    cwd, env: engine.env, signal, timeout: 10_000, maxBuffer: 8192, windowsHide: true,
   })
 }
 
