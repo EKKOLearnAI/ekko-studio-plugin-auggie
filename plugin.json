@@ -1,0 +1,69 @@
+{
+  "id": "auggie",
+  "name": "Augment Auggie",
+  "description": "Use the official Auggie CLI for coding chats in Studio.",
+  "i18n": {
+    "en": {
+      "name": "Augment Auggie",
+      "description": "Use the official Auggie CLI for coding chats in Studio."
+    },
+    "zh": {
+      "name": "Augment Auggie",
+      "description": "在 Studio 中通过官方 Auggie CLI 进行编码对话。"
+    },
+    "zh-TW": {
+      "name": "Augment Auggie",
+      "description": "在 Studio 中透過官方 Auggie CLI 進行程式開發對話。"
+    },
+    "ja": {
+      "name": "Augment Auggie",
+      "description": "公式 Auggie CLI を使って Studio でコーディングチャットを行います。"
+    },
+    "ko": {
+      "name": "Augment Auggie",
+      "description": "공식 Auggie CLI를 사용해 Studio에서 코딩 대화를 진행합니다."
+    },
+    "fr": {
+      "name": "Augment Auggie",
+      "description": "Utilisez la CLI officielle Auggie pour vos conversations de développement dans Studio."
+    },
+    "es": {
+      "name": "Augment Auggie",
+      "description": "Usa la CLI oficial de Auggie para conversaciones de programación en Studio."
+    },
+    "de": {
+      "name": "Augment Auggie",
+      "description": "Nutzen Sie die offizielle Auggie CLI für Coding-Chats in Studio."
+    },
+    "pt": {
+      "name": "Augment Auggie",
+      "description": "Use a CLI oficial do Auggie para conversas sobre programação no Studio."
+    },
+    "ru": {
+      "name": "Augment Auggie",
+      "description": "Используйте официальный Auggie CLI для диалогов о коде в Studio."
+    },
+    "ar": {
+      "name": "Augment Auggie",
+      "description": "استخدم واجهة Auggie الرسمية للدردشة البرمجية في Studio."
+    },
+    "tr": {
+      "name": "Augment Auggie",
+      "description": "Studio’da kodlama sohbetleri için resmî Auggie CLI’yi kullanın."
+    }
+  },
+  "version": "0.1.0",
+  "apiVersion": 1,
+  "server": "server.mjs",
+  "permissions": [
+    "agents"
+  ],
+  "author": {
+    "name": "Ekko Studio"
+  },
+  "repository": "https://github.com/EKKOLearnAI/ekko-studio-plugin-auggie",
+  "homepage": "https://www.augmentcode.com/product/cli",
+  "documentation": "https://github.com/EKKOLearnAI/ekko-studio-plugin-auggie#install",
+  "license": "MIT",
+  "icon": "assets/icon.png"
+}

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "description": "Auggie uses Studio Agent API v1. It holds no custom RPC, persisted data, or checkpoints. ACP sessions are created per turn.",
+  "models": {},
+  "rpc": {},
+  "storage": {},
+  "tools": {},
+  "commands": {},
+  "actions": {},
+  "events": {},
+  "checkpoints": {}
+}

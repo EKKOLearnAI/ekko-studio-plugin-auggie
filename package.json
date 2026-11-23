@@ -1,0 +1,37 @@
+{
+  "name": "@ekko-studio/plugin-auggie",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "ekko-studio plugins dev .",
+    "harness:check": "node scripts/plugin-harness.mjs check",
+    "test": "node --test tests/*.test.mjs",
+    "prepack": "npm run harness:check && npm test && npm run build --if-present && npm run harness:check"
+  },
+  "devDependencies": {
+    "@ekko-studio/plugin-sdk": "file:./sdk"
+  },
+  "description": "Use the official Auggie CLI for coding chats in Studio.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EKKOLearnAI/ekko-studio-plugin-auggie.git"
+  },
+  "files": [
+    "*.mjs",
+    "plugin.json",
+    "plugin.harness.json",
+    "LICENSE",
+    "AGENTS.md",
+    "assets/",
+    "contracts/",
+    "docs/",
+    "sdk/",
+    "scripts/",
+    "tests/"
+  ]
+}
