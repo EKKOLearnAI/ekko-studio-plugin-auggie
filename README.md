@@ -26,6 +26,20 @@ Studio uses an existing CLI when it finds one before any managed release has bee
 
 启用插件后，由超级管理员在「Agent 管理」点击「一键安装」。在运行 Studio 后端的机器，用同一操作系统账号执行上述登录命令，再新建 Auggie「全局」单聊。托管版可在卡片检查更新、更新或删除。已有外部 CLI 由原安装器维护。删除托管引擎会保留登录和配置。
 
+## Native configuration
+
+Open **Agent Management → Augment Auggie → Settings** using the Studio account and Profile that activated the plugin. These views manage the host OS user's Auggie configuration used by Global turns.
+
+| View | Manages |
+| --- | --- |
+| Skills | List, create, edit or remove `~/.augment/skills/<name>/SKILL.md`. Supply YAML front matter with matching `name` and a `description`. Removing the Skill leaves the directory's other resources in place. |
+| MCP servers | List, add, edit or remove user `mcpServers` entries in `~/.augment/settings.json`. Supported transports are `stdio`, `http` and `sse`. Keep `[stored value]` at the same position to retain a saved command, argument, URL, environment value or header. Connection status and tool diagnostics are available in the native CLI. |
+| Configuration | Patch `defaultModel`, `enableSkillCommands`, `enableToolSearch`, `theme` and `notificationMode`. Omitted values are preserved and `null` removes a user override. Unrelated JSONC configuration and comments are preserved. Terminal preferences apply to the native CLI. |
+
+The user directory is `%USERPROFILE%/.augment` on Windows. The same host-user paths are used for an official external CLI and the Studio-managed installation. Each new Global turn starts a fresh process and applies Auggie's configuration rules. Project-local, project and organization settings can override user defaults. In the official 1.2.2 probe, Auggie picked a project Skill when both layers had the same name, so a user Skill may be shadowed. Project files, compatible directories such as `.agents/skills`, and organization settings are managed outside these pages. A CLI wrapper that chooses another Auggie config root requires native management. [Augment settings](https://docs.augmentcode.com/cli/settings.md) · [Agent Skills](https://docs.augmentcode.com/cli/skills) · [MCP](https://docs.augmentcode.com/cli/integrations)
+
+在「Agent 管理 → Augment Auggie → 设置」进入 Skill、MCP 和配置文件。页面显示 Global 所用的宿主用户目录。Skill 删除只移除 `SKILL.md`，MCP 的已有值会遮蔽，配置页只写表中的偏好字段。项目覆盖仍由 Auggie 原生规则处理。
+
 ## Modes
 
 **Global** uses the host OS account’s native Augment login, configuration and native model catalog. It is available to the Studio account and Profile that enabled the plugin.
@@ -51,4 +65,4 @@ Set `EKKO_AUGGIE_NATIVE_TEST_CLI` to an absolute official npm executable or JS e
 
 ## Licensing
 
-The independent Studio ACP adapter and its icon are MIT. The bundled Studio SDK retains its MIT license and notices. The managed installer obtains the proprietary CLI directly from the official npm registry. Augment’s license governs CLI use, redistribution and commercial integration. [Adapter license](LICENSE) · [Auggie CLI license](https://github.com/augmentcode/auggie/blob/main/LICENSE.md)
+The independent Studio ACP adapter and its icon are MIT. The bundled Studio SDK, JSONC parser and YAML parser retain their licenses and notices. [Third-party notices](docs/third-party/README.md) The managed installer obtains the proprietary CLI directly from the official npm registry. Augment’s license governs CLI use, redistribution and commercial integration. [Adapter license](LICENSE) · [Auggie CLI license](https://github.com/augmentcode/auggie/blob/main/LICENSE.md)

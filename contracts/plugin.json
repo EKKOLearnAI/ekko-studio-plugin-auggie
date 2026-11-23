@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "description": "Auggie uses Studio Agent API v1. The plugin persists the managed engine selection. Each turn creates a fresh ACP session.",
+  "description": "Auggie uses Studio Agent API v1 and owner-only RPCs for Global native configuration. The plugin persists the managed engine selection. Each turn creates a fresh ACP session.",
   "models": {
     "engineSelection": {
       "type": "object",
@@ -16,9 +16,304 @@
           "description": "Name of the selected private release directory, or an empty string after the managed engine is removed."
         }
       }
+    },
+    "empty": {
+      "type": "object",
+      "description": "No parameters.",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {}
+    },
+    "ok": {
+      "type": "object",
+      "description": "The mutation succeeded.",
+      "additionalProperties": false,
+      "required": [
+        "ok"
+      ],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "description": "True after a successful write or removal.",
+          "enum": [
+            true
+          ]
+        }
+      }
+    },
+    "names": {
+      "type": "object",
+      "description": "Names from the native user layer and its source path.",
+      "additionalProperties": false,
+      "required": [
+        "names",
+        "path"
+      ],
+      "properties": {
+        "names": {
+          "type": "array",
+          "description": "Sorted names of managed native resources.",
+          "items": {
+            "type": "string",
+            "description": "Native resource name. The plugin validates it before using it as a file or JSON key.",
+            "maxLength": 80
+          }
+        },
+        "path": {
+          "type": "string",
+          "description": "Absolute path of the Global user settings file or Skills directory displayed to the owner.",
+          "maxLength": 4096
+        }
+      }
+    },
+    "mcpNames": {
+      "type": "object",
+      "description": "MCP server names and live revision of the common native settings file.",
+      "additionalProperties": false,
+      "required": [
+        "names",
+        "path",
+        "revision"
+      ],
+      "properties": {
+        "names": {
+          "type": "array",
+          "description": "Sorted names of managed native resources.",
+          "items": {
+            "type": "string",
+            "description": "Native resource name. The plugin validates it before using it as a file or JSON key.",
+            "maxLength": 80
+          }
+        },
+        "path": {
+          "type": "string",
+          "description": "Absolute path of the Global user settings file or Skills directory displayed to the owner.",
+          "maxLength": 4096
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 revision of the currently loaded UTF-8 file, or empty when missing.",
+          "maxLength": 64
+        }
+      }
+    },
+    "name": {
+      "type": "object",
+      "description": "Name of a user resource.",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Native resource name. The plugin validates it before using it as a file or JSON key.",
+          "maxLength": 80
+        }
+      }
+    },
+    "resource": {
+      "type": "object",
+      "description": "Editable resource contents and revision. Stored MCP values are masked.",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "revision"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Editor contents. Skill Markdown or JSON object text, depending on the operation.",
+          "maxLength": 524288
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 revision of the currently loaded UTF-8 file, or empty when missing.",
+          "maxLength": 64
+        }
+      }
+    },
+    "settingsEditor": {
+      "type": "object",
+      "description": "Safe editable preferences as JSON, native source and revision.",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "revision",
+        "path"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Editor contents. Skill Markdown or JSON object text, depending on the operation.",
+          "maxLength": 524288
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 revision of the currently loaded UTF-8 file, or empty when missing.",
+          "maxLength": 64
+        },
+        "path": {
+          "type": "string",
+          "description": "Absolute path of the Global user settings file or Skills directory displayed to the owner.",
+          "maxLength": 4096
+        }
+      }
+    },
+    "skillWrite": {
+      "type": "object",
+      "description": "Save a Skill Markdown file. An empty revision means creation.",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "text",
+        "revision"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Native resource name. The plugin validates it before using it as a file or JSON key.",
+          "maxLength": 80
+        },
+        "text": {
+          "type": "string",
+          "description": "Editor contents. Skill Markdown or JSON object text, depending on the operation.",
+          "maxLength": 524288
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 revision of the currently loaded UTF-8 file, or empty when missing.",
+          "maxLength": 64
+        }
+      }
+    },
+    "mcpWrite": {
+      "type": "object",
+      "description": "Save supported JSON transport fields. Stored value markers preserve the underlying string at the same location.",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "text",
+        "revision",
+        "existing"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Native resource name. The plugin validates it before using it as a file or JSON key.",
+          "maxLength": 80
+        },
+        "text": {
+          "type": "string",
+          "description": "Editor contents. Skill Markdown or JSON object text, depending on the operation.",
+          "maxLength": 524288
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 revision of the currently loaded UTF-8 file, or empty when missing.",
+          "maxLength": 64
+        },
+        "existing": {
+          "type": "boolean",
+          "description": "Whether the caller opened an existing MCP entry."
+        }
+      }
+    },
+    "removeResource": {
+      "type": "object",
+      "description": "Explicit removal of the displayed version.",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "revision"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Native resource name. The plugin validates it before using it as a file or JSON key.",
+          "maxLength": 80
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 revision of the currently loaded UTF-8 file, or empty when missing.",
+          "maxLength": 64
+        }
+      }
+    },
+    "settingsWrite": {
+      "type": "object",
+      "description": "Patch the supported non-secret settings. Omitted keys are unchanged and null removes a user override.",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "revision"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Editor contents. Skill Markdown or JSON object text, depending on the operation.",
+          "maxLength": 524288
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 revision of the currently loaded UTF-8 file, or empty when missing.",
+          "maxLength": 64
+        }
+      }
     }
   },
-  "rpc": {},
+  "rpc": {
+    "list-skills": {
+      "description": "List user Skills from the native directory.",
+      "input": "empty",
+      "output": "names"
+    },
+    "read-skill": {
+      "description": "Read a user SKILL.md and its revision.",
+      "input": "name",
+      "output": "resource"
+    },
+    "save-skill": {
+      "description": "Create or update the named Skill file.",
+      "input": "skillWrite",
+      "output": "ok"
+    },
+    "remove-skill": {
+      "description": "Remove SKILL.md while preserving sibling resources.",
+      "input": "removeResource",
+      "output": "ok"
+    },
+    "list-mcp": {
+      "description": "List user MCP servers without exposing stored values.",
+      "input": "empty",
+      "output": "mcpNames"
+    },
+    "read-mcp": {
+      "description": "Read supported and safely masked MCP fields.",
+      "input": "name",
+      "output": "resource"
+    },
+    "save-mcp": {
+      "description": "Add or edit the named MCP entry in settings.json.",
+      "input": "mcpWrite",
+      "output": "ok"
+    },
+    "remove-mcp": {
+      "description": "Remove just the named MCP entry.",
+      "input": "removeResource",
+      "output": "ok"
+    },
+    "read-settings": {
+      "description": "Read editable defaults without exposing unmanaged fields.",
+      "input": "empty",
+      "output": "settingsEditor"
+    },
+    "save-settings": {
+      "description": "Apply a patch to the editable defaults without changing other settings.",
+      "input": "settingsWrite",
+      "output": "ok"
+    }
+  },
   "storage": {
     "engineSelection": {
       "model": "engineSelection",

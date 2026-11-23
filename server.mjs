@@ -3,6 +3,9 @@ import { tmpdir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { Acp, AcpError } from './acp.mjs'
 import { acpArgs, engineVersion, isAuggieOne, nativeLoginMissing } from './engine.mjs'
+import { nativeConfiguration } from './native-config.mjs'
+import { registerRpc } from './sdk/harness/contracts.mjs'
+import contract from './contracts/plugin.json' with { type: 'json' }
 import { managedEngine } from './managed-engine.mjs'
 import { acpServers, chooseModel, initialize, nativeModels, promptContent, validId } from './protocol.mjs'
 import { openAcp } from './turn.mjs'
@@ -15,6 +18,10 @@ const ownerOnly = 'Auggie uses the host account login and is available to the St
 const loginRequired = 'Sign in on the Studio host with auggie auth login (1.x) or auggie login (0.x).'
 const finishReasons = { end_turn: 'stop', refusal: 'stop', max_tokens: 'length', max_turn_requests: 'tool_limit' }
 const sameOwner = (left, right) => left.userId === right.userId && left.profile === right.profile
+function requireOwner(owner, run) {
+  if (!sameOwner(owner, run.identity)) throw new Error(ownerOnly)
+  run.signal.throwIfAborted()
+}
 const catalog = (status, models = [], message) => ({
   status, models, source: 'auggie-acp', scope: 'available', ...(message ? { message } : {}),
 })
@@ -137,17 +144,18 @@ function createSession(owner, session, getEngine) {
 
 export function definitionFor(owner, manager) {
   const getEngine = async () => (await manager.resolve()).engine
-  const checkOwner = run => {
-    if (!sameOwner(owner, run.identity)) throw new Error(ownerOnly)
-  }
   return {
     id: manifest.id, name: manifest.name, vendor: 'Augment Code', description: manifest.description, agentApiVersion: 1,
     getStatus: run => manager.status(run.signal),
     management: {
       installGuideUrl: manifest.documentation,
-      checkUpdate(run) { checkOwner(run); return manager.checkUpdate(run) },
-      upgrade(input, run) { checkOwner(run); return manager.upgrade(input, run) },
-      remove(run) { checkOwner(run); return manager.remove(run) },
+      settings(run) {
+        requireOwner(owner, run)
+        return { viewId: 'skills' }
+      },
+      checkUpdate(run) { requireOwner(owner, run); return manager.checkUpdate(run) },
+      upgrade(input, run) { requireOwner(owner, run); return manager.upgrade(input, run) },
+      remove(run) { requireOwner(owner, run); return manager.remove(run) },
     },
     modes: {
       global: { listModels: run => sameOwner(owner, run.identity) ? listModels(run, getEngine) : catalog('auth_required', [], ownerOnly) },
@@ -159,6 +167,28 @@ export function definitionFor(owner, manager) {
 
 export function apply(ctx) {
   const { userId, profile } = ctx.identity
-  const registration = ctx.extensions.agents.register(definitionFor({ userId, profile }, managedEngine(ctx.paths.dataDir)))
-  return () => registration.dispose()
+  const owner = { userId, profile }
+  const config = nativeConfiguration()
+  const handlers = {
+    'list-skills': 'listSkills', 'read-skill': 'readSkill', 'save-skill': 'saveSkill', 'remove-skill': 'removeSkill',
+    'list-mcp': 'listMcp', 'read-mcp': 'readMcp', 'save-mcp': 'saveMcp', 'remove-mcp': 'removeMcp',
+    'read-settings': 'readSettings', 'save-settings': 'saveSettings',
+  }
+  const methods = Object.entries(handlers).map(([name, method]) =>
+    registerRpc(ctx, contract, name, async (input, run) => {
+      requireOwner(owner, run)
+      try {
+        return await config[method](input, run.signal)
+      } catch (error) {
+        run.signal.throwIfAborted()
+        if (error.code || error instanceof TypeError || error instanceof RangeError) {
+          throw new Error('Unable to read or write the Auggie configuration files.')
+        }
+        throw error
+      }
+    }))
+  const registration = ctx.extensions.agents.register(definitionFor(owner, managedEngine(ctx.paths.dataDir)))
+  return async () => {
+    await Promise.all([registration.dispose(), ...methods.map(dispose => dispose())])
+  }
 }

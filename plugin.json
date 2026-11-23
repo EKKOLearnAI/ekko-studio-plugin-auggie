@@ -5,58 +5,119 @@
   "i18n": {
     "en": {
       "name": "Augment Auggie",
-      "description": "Use the official Auggie CLI for coding chats in Studio."
+      "description": "Use the official Auggie CLI for coding chats in Studio.",
+      "views": {
+        "skills": "Skills",
+        "mcp": "MCP servers",
+        "configuration": "Configuration"
+      }
     },
     "zh": {
       "name": "Augment Auggie",
-      "description": "在 Studio 中通过官方 Auggie CLI 进行编码对话。"
+      "description": "在 Studio 中通过官方 Auggie CLI 进行编码对话。",
+      "views": {
+        "skills": "Skill 管理",
+        "mcp": "MCP 管理",
+        "configuration": "配置文件"
+      }
     },
     "zh-TW": {
       "name": "Augment Auggie",
-      "description": "在 Studio 中透過官方 Auggie CLI 進行程式開發對話。"
+      "description": "在 Studio 中透過官方 Auggie CLI 進行程式開發對話。",
+      "views": {
+        "skills": "Skill 管理",
+        "mcp": "MCP 管理",
+        "configuration": "設定檔"
+      }
     },
     "ja": {
       "name": "Augment Auggie",
-      "description": "公式 Auggie CLI を使って Studio でコーディングチャットを行います。"
+      "description": "公式 Auggie CLI を使って Studio でコーディングチャットを行います。",
+      "views": {
+        "skills": "スキル管理",
+        "mcp": "MCP サーバー",
+        "configuration": "設定ファイル"
+      }
     },
     "ko": {
       "name": "Augment Auggie",
-      "description": "공식 Auggie CLI를 사용해 Studio에서 코딩 대화를 진행합니다."
+      "description": "공식 Auggie CLI를 사용해 Studio에서 코딩 대화를 진행합니다.",
+      "views": {
+        "skills": "스킬 관리",
+        "mcp": "MCP 서버",
+        "configuration": "설정 파일"
+      }
     },
     "fr": {
       "name": "Augment Auggie",
-      "description": "Utilisez la CLI officielle Auggie pour vos conversations de développement dans Studio."
+      "description": "Utilisez la CLI officielle Auggie pour vos conversations de développement dans Studio.",
+      "views": {
+        "skills": "Compétences",
+        "mcp": "Serveurs MCP",
+        "configuration": "Configuration"
+      }
     },
     "es": {
       "name": "Augment Auggie",
-      "description": "Usa la CLI oficial de Auggie para conversaciones de programación en Studio."
+      "description": "Usa la CLI oficial de Auggie para conversaciones de programación en Studio.",
+      "views": {
+        "skills": "Habilidades",
+        "mcp": "Servidores MCP",
+        "configuration": "Configuración"
+      }
     },
     "de": {
       "name": "Augment Auggie",
-      "description": "Nutzen Sie die offizielle Auggie CLI für Coding-Chats in Studio."
+      "description": "Nutzen Sie die offizielle Auggie CLI für Coding-Chats in Studio.",
+      "views": {
+        "skills": "Skills",
+        "mcp": "MCP-Server",
+        "configuration": "Konfiguration"
+      }
     },
     "pt": {
       "name": "Augment Auggie",
-      "description": "Use a CLI oficial do Auggie para conversas sobre programação no Studio."
+      "description": "Use a CLI oficial do Auggie para conversas sobre programação no Studio.",
+      "views": {
+        "skills": "Skills",
+        "mcp": "Servidores MCP",
+        "configuration": "Configuração"
+      }
     },
     "ru": {
       "name": "Augment Auggie",
-      "description": "Используйте официальный Auggie CLI для диалогов о коде в Studio."
+      "description": "Используйте официальный Auggie CLI для диалогов о коде в Studio.",
+      "views": {
+        "skills": "Навыки",
+        "mcp": "Серверы MCP",
+        "configuration": "Конфигурация"
+      }
     },
     "ar": {
       "name": "Augment Auggie",
-      "description": "استخدم واجهة Auggie الرسمية للدردشة البرمجية في Studio."
+      "description": "استخدم واجهة Auggie الرسمية للدردشة البرمجية في Studio.",
+      "views": {
+        "skills": "المهارات",
+        "mcp": "خوادم MCP",
+        "configuration": "الإعدادات"
+      }
     },
     "tr": {
       "name": "Augment Auggie",
-      "description": "Studio’da kodlama sohbetleri için resmî Auggie CLI’yi kullanın."
+      "description": "Studio’da kodlama sohbetleri için resmî Auggie CLI’yi kullanın.",
+      "views": {
+        "skills": "Beceriler",
+        "mcp": "MCP sunucuları",
+        "configuration": "Yapılandırma"
+      }
     }
   },
-  "version": "0.2.0",
+  "version": "0.3.0",
   "apiVersion": 1,
   "server": "server.mjs",
   "permissions": [
-    "agents"
+    "agents",
+    "ui"
   ],
   "author": {
     "name": "Ekko Studio"
@@ -65,5 +126,26 @@
   "homepage": "https://www.augmentcode.com/product/cli",
   "documentation": "https://github.com/EKKOLearnAI/ekko-studio-plugin-auggie#install",
   "license": "MIT",
-  "icon": "assets/icon.png"
+  "icon": "assets/icon.png",
+  "client": "client.mjs",
+  "views": [
+    {
+      "id": "skills",
+      "title": "Skills",
+      "slot": "agent-settings",
+      "icon": "skills"
+    },
+    {
+      "id": "mcp",
+      "title": "MCP servers",
+      "slot": "agent-settings",
+      "icon": "mcp"
+    },
+    {
+      "id": "configuration",
+      "title": "Configuration",
+      "slot": "agent-settings",
+      "icon": "settings"
+    }
+  ]
 }

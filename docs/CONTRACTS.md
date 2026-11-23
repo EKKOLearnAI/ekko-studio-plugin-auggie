@@ -2,7 +2,7 @@
 
 ## Registration and ownership
 
-The only extension is Agent API v1, with plugin ID `auggie`, local Agent ID `auggie` and stable ID `plugin:auggie/auggie`. It provides `global` mode, the `chat` surface and streaming. The installer account and Profile must match the trusted runtime identity because Auggie uses an OS account's native login and configuration. Each run must also match its Studio session and Agent ID. There are no custom RPCs, native credential fields or checkpoints. The only plugin-owned persistent record is the managed engine selection. [SDK types](../sdk/src/agents.ts)
+The only extension is Agent API v1, with plugin ID `auggie`, local Agent ID `auggie` and stable ID `plugin:auggie/auggie`. It provides `global` mode, the `chat` surface and streaming. The installer account and Profile must match the trusted runtime identity because Auggie uses an OS account's native login and configuration. Each run must also match its Studio session and Agent ID. The configuration RPCs edit the host user’s native Auggie files. Managed engine selection is the only record under plugin data. Native login credentials and checkpoints are outside the editor. [SDK types](../sdk/src/agents.ts)
 
 ## Engine management
 
@@ -12,6 +12,15 @@ The only extension is Agent API v1, with plugin ID `auggie`, local Agent ID `aug
 - Studio checks the official npm stable channel and installs an exact supported version into a new private release directory. The npm subprocess uses the host Node/npm runtime, the fixed official registry, empty user/global npm configuration paths, and a disposable home and cache. Lifecycle scripts are disabled. The plugin verifies the package name, executable metadata, real executable path, reported version, and ACP v1 agent identity before committing the selection atomically.
 - Failed or cancelled staging leaves the previous release selected. A successful upgrade cleans up that previous release. Removal atomically clears the selection and deletes only the selected managed release directory. The persisted deletion record keeps a newly located external binary from being reported as the result of the removal. An explicitly configured external CLI always takes precedence. Studio sessions and native Auggie state are outside the managed directory. If filesystem cleanup fails, the runtime remains unselected and the error reports the residual cleanup.
 - The current Studio management card renders actions from static advertised capabilities. On an external installation, the backend denies removal and returns a non-updatable check result. Hiding the external Delete control dynamically would require a host contract change.
+
+## Native configuration views and RPCs
+
+- `management.settings` returns the plugin’s `skills` Agent settings view. Studio renders the declared Skills, MCP servers and Configuration views and routes their RPCs. Opening the settings and invoking its RPCs both require the activation account and Profile from the authenticated host context.
+- The native settings directory is derived from the environment used by Global engine processes. The editor selects the user layer. Project, project-local and organization overrides are resolved by Auggie. The editor’s inputs contain resource names and content only, and do not carry a workspace or custom settings path.
+- The Skill editor operates on regular files directly under `skills/<name>/SKILL.md`. It checks the resource name, YAML front matter and file revision. Removing a Skill unlinks its Markdown file and retains auxiliary files. Symlinked configuration paths require native management.
+- MCP and Configuration share the user `settings.json` revision. JSONC edits use bounded atomic replacement and preserve unrelated settings and comments. Existing MCP commands, arguments, URLs and all header and environment values are masked. Keep markers in place to retain their underlying strings. Unknown MCP fields remain in the file. Native account files are outside the editor.
+- The Configuration editor exposes the five keys listed in the README. Null clears the user override. Omitted values and other layers stay in place.
+- A missing file has an empty revision. Readers and writers reject malformed or ambiguous JSONC and unsafe path components. Mutations within one plugin instance are serialized, with a revision check immediately before atomic file replacement to catch external writes.
 
 ## Models
 
