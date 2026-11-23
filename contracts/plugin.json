@@ -1,9 +1,32 @@
 {
   "schemaVersion": 1,
-  "description": "Auggie uses Studio Agent API v1. It holds no custom RPC, persisted data, or checkpoints. ACP sessions are created per turn.",
-  "models": {},
+  "description": "Auggie uses Studio Agent API v1. The plugin persists the managed engine selection. Each turn creates a fresh ACP session.",
+  "models": {
+    "engineSelection": {
+      "type": "object",
+      "description": "Selection of a verified Studio-managed Auggie npm release.",
+      "additionalProperties": false,
+      "required": [
+        "release"
+      ],
+      "properties": {
+        "release": {
+          "type": "string",
+          "maxLength": 14,
+          "description": "Name of the selected private release directory, or an empty string after the managed engine is removed."
+        }
+      }
+    }
+  },
   "rpc": {},
-  "storage": {},
+  "storage": {
+    "engineSelection": {
+      "model": "engineSelection",
+      "version": 1,
+      "scope": "Plugin data directory",
+      "description": "The plugin-owned engine/current.json pointer. Missing permits external CLI discovery."
+    }
+  },
   "tools": {},
   "commands": {},
   "actions": {},

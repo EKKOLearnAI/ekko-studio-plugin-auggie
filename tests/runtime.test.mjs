@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { childEnv, findEngine } from '../engine.mjs'
+import { managedEngine } from '../managed-engine.mjs'
 import { apply, definitionFor } from '../server.mjs'
 import { assertContracts } from '../sdk/harness/contracts.mjs'
 import contract from '../contracts/plugin.json' with { type: 'json' }
@@ -15,7 +16,7 @@ const owner = { userId: 42, profile: 'default' }
 const identity = { ...owner, agentId: 'plugin:auggie/auggie', sessionId: 'test-chat' }
 const makeInput = (prompt, history = []) => ({ instructions: [], input: [{ type: 'text', text: prompt }], history, options: {} })
 
-async function setup(t, { key = 'normal', getEngine } = {}) {
+async function setup(t, { key = 'normal', manager } = {}) {
   const path = await mkdtemp(join(await realpath(tmpdir()), 'auggie-test-'))
   const runtimeDir = join(path, 'runtime')
   const workspaceDir = join(path, '工作区 with spaces')
@@ -23,11 +24,12 @@ async function setup(t, { key = 'normal', getEngine } = {}) {
   const paths = { runtimeDir, workspaceDir }
   const controller = new AbortController()
   const lifecycle = { add() {} }
-  const definition = definitionFor(owner, getEngine ?? (async () => ({
+  const engine = {
     executable: process.execPath,
     args: [fixture],
     env: { ...childEnv({ ...process.env, HOME: path, USERPROFILE: path }), AUGGIE_TEST_MODE: key },
-  })))
+  }
+  const definition = definitionFor(owner, manager ?? { async resolve() { return { engine } } })
   const base = { identity, mode: 'global', paths, signal: controller.signal, lifecycle }
   const session = definition.runtime.createSession(base)
   t.after(async () => { await session.dispose(); await rm(path, { recursive: true, force: true }) })
@@ -53,7 +55,7 @@ async function setup(t, { key = 'normal', getEngine } = {}) {
 test('registers the stable ID, declared features, and MIT manifest with the Studio Agent API', async () => {
   let registration
   let disposed
-  const cleanup = apply({ identity, extensions: { agents: { register(definition) {
+  const cleanup = apply({ identity, paths: { dataDir: tmpdir() }, extensions: { agents: { register(definition) {
     registration = definition
     return { dispose() { disposed = true } }
   } } } })
@@ -71,9 +73,9 @@ test('registers the stable ID, declared features, and MIT manifest with the Stud
 test('external engine detection rejects relative overrides and does not inherit Studio secrets', async () => {
   assert.equal(await findEngine({ EKKO_FACTORY_AUGGIE_EXECUTABLE: 'relative/auggie' }), null)
   const env = childEnv({ Path: '/bin', AUGMENT_SESSION_AUTH: 'auth', STUDIO_PROXY_TOKEN: 'secret', NODE_OPTIONS: '--require elsewhere' })
-  assert.deepEqual(env, { Path: '/bin', AUGMENT_DISABLE_AUTO_UPDATE: '1' })
+  assert.deepEqual(env, { PATH: process.platform === 'win32' ? '' : '/bin', AUGMENT_DISABLE_AUTO_UPDATE: '1' })
   const engine = await findEngine({ ...process.env, EKKO_AUGGIE_EXECUTABLE: fixture })
-  assert.equal(engine.executable, process.execPath)
+  assert.equal(engine.executable, await realpath(process.execPath))
   assert.deepEqual(engine.args, [await realpath(fixture)])
 })
 
@@ -254,9 +256,10 @@ const realCli = process.env.EKKO_AUGGIE_NATIVE_TEST_CLI
 test('official Auggie CLI negotiates ACP and reports login required from a disposable home', { skip: !realCli }, async t => {
   const tmp = await mkdtemp(join(await realpath(tmpdir()), 'auggie-native-'))
   t.after(() => rm(tmp, { recursive: true, force: true }))
-  const getEngine = () => findEngine({ PATH: process.env.PATH, HOME: tmp, USERPROFILE: tmp,
-    SYSTEMROOT: process.env.SystemRoot, TEMP: tmp, TMPDIR: tmp, EKKO_AUGGIE_EXECUTABLE: realCli })
-  const { definition, base, session, run } = await setup(t, { getEngine })
+  const env = { PATH: process.env.PATH, HOME: tmp, USERPROFILE: tmp,
+    SYSTEMROOT: process.env.SystemRoot, TEMP: tmp, TMPDIR: tmp, EKKO_AUGGIE_EXECUTABLE: realCli }
+  const manager = managedEngine(join(tmp, 'plugin'), { env })
+  const { definition, base, session, run } = await setup(t, { manager })
   const status = await definition.getStatus(base)
   assert.equal(status.installed, true)
   assert.match(status.version, /^(0\.37\.0|1\.2\.2)$/)

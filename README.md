@@ -1,37 +1,44 @@
 # Augment Auggie for Ekko Studio
 
-Run the official Auggie CLI through ACP in a Studio Global coding chat. The stable Studio Agent ID is `plugin:auggie/auggie`.
+Run the official Auggie CLI over ACP in a Studio Global coding chat. The stable Agent ID is `plugin:auggie/auggie`.
 
 ## Install
 
-1. On the **Studio backend host**, install the official Auggie CLI with Node.js 24.2 or later. Install and sign in as the OS user running Studio. The 1.x CLI and the ACP Registry's 0.x CLI use different login commands. [Official installation](https://docs.augmentcode.com/cli/setup-auggie/install-auggie-cli) · [Authentication](https://docs.augmentcode.com/cli/setup-auggie/authentication)
+1. In **Studio → Plugins → Install from source**, choose an Auggie release or the absolute path to this checkout. Review the source and enable the plugin.
+2. In **Agent Management**, a Studio super admin can click **Install** on the Auggie card. The Studio backend needs a usable Node.js and npm installation and access to the official npm registry. The managed channel tracks the stable `@augmentcode/auggie@latest` release. The tested stable engine is `1.2.2`. [Augment installation](https://docs.augmentcode.com/cli/setup-auggie/install-auggie-cli)
+3. In a terminal on the **Studio backend host**, sign in as the OS user running Studio. For a Studio-managed 1.x engine, use the same version shown on the card to run the official login command through npm.
 
    ```sh
-   npm install -g @augmentcode/auggie@1.2.2
-   auggie --version
-   auggie auth login
-   auggie auth status
+   npm exec --yes --package=@augmentcode/auggie@1.2.2 -- auggie auth login
+   npm exec --yes --package=@augmentcode/auggie@1.2.2 -- auggie auth status
    ```
 
-   For the ACP Registry version, use `npm install -g @augmentcode/auggie@0.37.0` and `auggie login`. [ACP Registry](https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json) · [0.x authentication](https://docs.augmentcode.com/cli/v0/setup-auggie/authentication)
+   An existing 1.x installation can use `auggie auth login` directly. For 0.37.x, use `auggie login`. The terminal command authenticates the native Augment account in the OS user’s home directory. [1.x authentication](https://docs.augmentcode.com/cli/setup-auggie/authentication) · [0.x authentication](https://docs.augmentcode.com/cli/v0/setup-auggie/authentication)
+4. Open a new Auggie **Global** chat and select a workspace. The native model catalog appears when Auggie exposes it.
 
-2. In **Studio → Plugins → Install from source**, enter `github:EKKOLearnAI/ekko-studio-plugin-auggie#main`, review the source and enable the plugin. For repeatable installs, replace `main` with the full Git commit in the verification report. An absolute path to the plugin checkout works for local installation.
-3. In **Agent Management**, check the Auggie CLI version. Open a new Auggie **Global** chat and select a workspace. Use the model list when Auggie provides one, or leave the CLI default selected.
-4. If Studio cannot find the CLI, put `auggie` on the backend process PATH or set `EKKO_AUGGIE_EXECUTABLE` to the absolute executable path before restarting Studio. On Windows, the npm global installation is located through PATH or `%APPDATA%/npm`. For a custom npm prefix, set the override to the official package's `auggie-v2.mjs` (1.x) or `augment.mjs` (0.x). A custom `auggie.exe` also works with the override.
+### Update or delete the managed CLI
+
+Use **Check for update** and then **Update to v…** in Agent Management. **Delete** removes the selected managed release from the plugin data directory. Augment login, native settings, Studio conversations and external installations are preserved. Deletion makes **Install** available again.
+
+Studio uses an existing CLI when it finds one before any managed release has been selected. Set `EKKO_AUGGIE_EXECUTABLE` in the backend process environment to take explicit precedence. On Windows, Studio looks at PATH and `%APPDATA%/npm` for the official package entry points. With a custom npm prefix, point the override to the absolute `auggie-v2.mjs` or `augment.mjs` path. Update or delete an external CLI through its original installer. [Selection and deletion boundaries](docs/CONTRACTS.md#engine-management)
 
 ### 中文安装
 
-在 Studio **服务端所在机器**安装官方 CLI，并用运行 Studio 的操作系统账号登录。1.x 用 `auggie auth login`，ACP 目录中的 `0.37.0` 用 `auggie login`。在插件中心选择「从来源安装」，填入上面的 GitHub 来源或本地源码绝对路径，确认并启用。到「Agent 管理」检查版本，再新建 Auggie「全局」单聊并选择工作区。桌面找不到 CLI 时，在 Studio 服务进程环境设置 `EKKO_AUGGIE_EXECUTABLE` 后重启。
+启用插件后，由超级管理员在「Agent 管理」点击「一键安装」。在运行 Studio 后端的机器，用同一操作系统账号执行上述登录命令，再新建 Auggie「全局」单聊。托管版可在卡片检查更新、更新或删除。已有外部 CLI 由原安装器维护。删除托管引擎会保留登录和配置。
 
-## Runtime behavior
+## Modes
 
-- The Studio account and Profile that enabled the plugin use the host account's native login. Complete browser login from the CLI. Studio Plugin settings contain no Augment credentials.
-- The selected Studio workspace becomes both the process working directory and the ACP workspace. Auggie applies its own indexing rules and workspace trust. A quick check with a real account is to open two separate chats in test repositories containing different marker strings and ask each chat for its repository's marker. [Augment workspace context](https://docs.augmentcode.com/cli/setup-auggie/workspace-context)
-- Responses stream into Studio. Each turn has a fresh native ACP session and includes the current Studio conversation history. Stop cancels the active prompt. Only permissions requested by the CLI through ACP appear in Studio, and Studio's approval applies once. Existing Auggie permission policies still apply. [Auggie tool permissions](https://docs.augmentcode.com/cli/permissions)
-- Images use native ACP image blocks when available. Small UTF-8 files can be included in the prompt when embedded resources are unavailable. Other files are staged for the CLI's file tools and removed when the turn ends. The total attachment limit is 8 MiB.
-- Studio currently exposes Global single chat. Managed CLI install, scoped model proxy, group chat, workflows and native session recovery are outside this release.
+**Global** uses the host OS account’s native Augment login, configuration and native model catalog. It is available to the Studio account and Profile that enabled the plugin.
 
-## Development and verified scope
+**Scoped** requires the CLI to send inference requests to the Studio-selected model through Studio’s temporary proxy. Auggie 1.2.2 and the tested 1.3.0 preview reject extension provider registration. A Pi-compatible `models.json` did not route a request to a local Chat Completions endpoint in either version. The plugin registers Global only. The upstream dependency is a supported way to bind a custom inference endpoint and model in official Auggie ACP. [Auggie ACP](https://docs.augmentcode.com/cli/acp/agent) · [Auggie CLI flags](https://docs.augmentcode.com/cli/reference) · [Studio model-mode contract](https://github.com/EKKOLearnAI/ekko-studio/blob/fbb9185552cb8d0680c6d0ef4808501ef637e384/docs/plugins.md#global-与-scoped)
+
+## Runtime and verification
+
+- The selected Studio workspace is passed as both cwd and the ACP workspace. Auggie applies its native indexing and workspace trust rules.
+- Each turn starts a fresh native ACP session and uses Studio conversation history. Stop cancels the active prompt. ACP approvals in Studio apply once. The native CLI still controls its tool permission policy.
+- Images use ACP image blocks when advertised. Files use embedded resources, inline UTF-8 text, or private temporary files for file tools. The total per-turn attachment limit is 8 MiB.
+- This release exposes single chat and streaming. Native session resume stays disabled.
+- The local official CLI checks cover 0.37.0 and 1.2.2 on macOS arm64. GitHub Actions uses protocol and engine-management fixtures on Linux, macOS and Windows. Official Linux, Windows native and WSL execution, authenticated replies, workspace indexing and native permissions require separate verification. Augment’s install guide lists macOS, Linux and Windows WSL.
 
 ```sh
 npm ci --ignore-scripts --no-audit --no-fund
@@ -40,8 +47,8 @@ npm test
 npm pack --dry-run --ignore-scripts
 ```
 
-Set `EKKO_AUGGIE_NATIVE_TEST_CLI` to an absolute official npm executable or JS entry point to test version detection and the signed-out state with a disposable OS home. macOS arm64 was used for the native probes of 0.37.0 and 1.2.2. The CI matrix uses an ACP fixture on Linux, macOS and Windows. Paid-account responses, indexing on two actual repositories, native permission prompts and native MCP/attachment handling require separate validation with an authenticated account. [Runtime contract](docs/CONTRACTS.md)
+Set `EKKO_AUGGIE_NATIVE_TEST_CLI` to an absolute official npm executable or JS entry point to test signed-out detection in a disposable OS home. [Runtime contract](docs/CONTRACTS.md)
 
 ## Licensing
 
-The independent Studio ACP adapter and its icon are MIT. The bundled Studio SDK retains its MIT license and notices. Install the proprietary CLI separately through Augment's official channel. Augment's license governs use of the CLI and includes restrictions on redistribution and commercial integration. [Adapter license](LICENSE) · [Augment CLI license](https://github.com/augmentcode/auggie/blob/main/LICENSE.md)
+The independent Studio ACP adapter and its icon are MIT. The bundled Studio SDK retains its MIT license and notices. The managed installer obtains the proprietary CLI directly from the official npm registry. Augment’s license governs CLI use, redistribution and commercial integration. [Adapter license](LICENSE) · [Auggie CLI license](https://github.com/augmentcode/auggie/blob/main/LICENSE.md)

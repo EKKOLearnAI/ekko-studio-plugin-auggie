@@ -2,13 +2,14 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { Acp, AcpError } from './acp.mjs'
-import { acpArgs, engineVersion, findEngine, isAuggieOne, nativeLoginMissing } from './engine.mjs'
+import { acpArgs, engineVersion, isAuggieOne, nativeLoginMissing } from './engine.mjs'
+import { managedEngine } from './managed-engine.mjs'
 import { acpServers, chooseModel, initialize, nativeModels, promptContent, validId } from './protocol.mjs'
 import { openAcp } from './turn.mjs'
 import manifest from './plugin.json' with { type: 'json' }
 
 const id = 'plugin:auggie/auggie'
-const install = 'Install the official Auggie CLI on the Studio host and restart Studio if its PATH changed.'
+const install = 'Install Auggie from Studio Agent Management or provide a working official CLI on the Studio host.'
 const unavailable = 'Could not verify the Auggie CLI executable.'
 const ownerOnly = 'Auggie uses the host account login and is available to the Studio account and Profile that enabled this plugin.'
 const loginRequired = 'Sign in on the Studio host with auggie auth login (1.x) or auggie login (0.x).'
@@ -41,7 +42,7 @@ async function listModels(run, getEngine) {
     const engine = await getEngine()
     if (!engine) return catalog('not_installed', [], install)
     const version = await engineVersion(engine, signal)
-    if (!version) return catalog('error', [], unavailable)
+    if (!version || (engine.version && engine.version !== version)) return catalog('error', [], unavailable)
     cwd = await mkdtemp(join(await realpath(tmpdir()), 'studio-auggie-models-'))
     signal.throwIfAborted()
     acp = new Acp(engine.executable, [...engine.args, ...acpArgs(version, cwd)], { cwd, env: engine.env }, ({ id: requestId }) => {
@@ -71,7 +72,7 @@ async function runTurn(input, run, getEngine, signal) {
   let temporaryFiles
   try {
     const version = await engineVersion(engine, startup)
-    if (!version) throw new Error(unavailable)
+    if (!version || (engine.version && engine.version !== version)) throw new Error(unavailable)
     if (!isAbsolute(run.paths.workspaceDir)) throw new Error('Studio must provide an absolute Auggie workspace path.')
     const cwd = await realpath(run.paths.workspaceDir)
     startup.throwIfAborted()
@@ -101,7 +102,8 @@ async function runTurn(input, run, getEngine, signal) {
 }
 
 function createSession(owner, session, getEngine) {
-  if (!sameOwner(owner, session.identity) || session.mode !== 'global' || session.identity.agentId !== id) throw new Error(ownerOnly)
+  if (session.mode !== 'global') throw new Error('Auggie cannot use a Studio-scoped model with its current CLI.')
+  if (!sameOwner(owner, session.identity) || session.identity.agentId !== id) throw new Error(ownerOnly)
   const disposed = new AbortController()
   let active
   return {
@@ -133,17 +135,20 @@ function createSession(owner, session, getEngine) {
   }
 }
 
-export function definitionFor(owner, getEngine = findEngine) {
+export function definitionFor(owner, manager) {
+  const getEngine = async () => (await manager.resolve()).engine
+  const checkOwner = run => {
+    if (!sameOwner(owner, run.identity)) throw new Error(ownerOnly)
+  }
   return {
     id: manifest.id, name: manifest.name, vendor: 'Augment Code', description: manifest.description, agentApiVersion: 1,
-    async getStatus(run) {
-      const engine = await getEngine()
-      if (!engine) return { installed: false, version: '', source: 'not-installed' }
-      const version = await engineVersion(engine, run.signal)
-      return version ? { installed: true, version, source: 'external' }
-        : { installed: false, version: '', source: 'not-installed', error: unavailable }
+    getStatus: run => manager.status(run.signal),
+    management: {
+      installGuideUrl: manifest.documentation,
+      checkUpdate(run) { checkOwner(run); return manager.checkUpdate(run) },
+      upgrade(input, run) { checkOwner(run); return manager.upgrade(input, run) },
+      remove(run) { checkOwner(run); return manager.remove(run) },
     },
-    management: { installGuideUrl: manifest.documentation },
     modes: {
       global: { listModels: run => sameOwner(owner, run.identity) ? listModels(run, getEngine) : catalog('auth_required', [], ownerOnly) },
     },
@@ -154,6 +159,6 @@ export function definitionFor(owner, getEngine = findEngine) {
 
 export function apply(ctx) {
   const { userId, profile } = ctx.identity
-  const registration = ctx.extensions.agents.register(definitionFor({ userId, profile }))
+  const registration = ctx.extensions.agents.register(definitionFor({ userId, profile }, managedEngine(ctx.paths.dataDir)))
   return () => registration.dispose()
 }
